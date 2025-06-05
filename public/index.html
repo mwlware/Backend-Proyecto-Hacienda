@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gmail Attachment Downloader</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .email-card {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .email-header {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+        .attachment-list {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .email-body {
+            white-space: pre-wrap;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .last-update {
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .refresh-indicator {
+            display: none;
+            margin-left: 10px;
+        }
+        .refresh-indicator.active {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="mb-4">Gmail Attachment Downloader</h1>
+        
+        <div class="mb-4">
+            <a href="/auth" class="btn btn-primary">Autenticar con Google</a>
+            <button onclick="loadEmails()" class="btn btn-secondary ms-2">
+                Actualizar Ahora
+                <span id="refresh-icon" class="refresh-indicator">⟳</span>
+            </button>
+            <span id="last-update" class="last-update"></span>
+        </div>
+
+        <div id="emails-container"></div>
+    </div>
+
+    <script>
+        let autoRefreshInterval;
+        const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutos en milisegundos
+
+        // Función para formatear la fecha
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+
+        // Función para formatear el tiempo transcurrido
+        function formatTimeAgo(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+            
+            if (seconds < 60) return 'hace un momento';
+            
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `hace ${minutes} minuto${minutes !== 1 ? 's' : ''}`;
+            
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `hace ${hours} hora${hours !== 1 ? 's' : ''}`;
+            
+            const days = Math.floor(hours / 24);
+            return `hace ${days} día${days !== 1 ? 's' : ''}`;
+        }
+
+        // Función para formatear el tamaño del archivo
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Función para actualizar el indicador de última actualización
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const lastUpdateElement = document.getElementById('last-update');
+            lastUpdateElement.textContent = `Última actualización: ${formatDate(now)}`;
+            
+            // Actualizar el tiempo transcurrido cada minuto
+            setInterval(() => {
+                lastUpdateElement.textContent = `Última actualización: ${formatTimeAgo(now)}`;
+            }, 60000);
+        }
+
+        // Función para mostrar/ocultar el indicador de actualización
+        function toggleRefreshIndicator(show) {
+            const refreshIcon = document.getElementById('refresh-icon');
+            if (show) {
+                refreshIcon.classList.add('active');
+            } else {
+                refreshIcon.classList.remove('active');
+            }
+        }
+
+        // Función para cargar los correos
+        async function loadEmails() {
+            try {
+                toggleRefreshIndicator(true);
+                const response = await fetch('/emails');
+                const emails = await response.json();
+                
+                const container = document.getElementById('emails-container');
+                container.innerHTML = '';
+
+                emails.forEach(email => {
+                    const emailCard = document.createElement('div');
+                    emailCard.className = 'email-card';
+                    
+                    emailCard.innerHTML = `
+                        <div class="email-header">
+                            <h3>${email.subject}</h3>
+                            <p><strong>De:</strong> ${email.from}</p>
+                            <p><strong>Para:</strong> ${email.to}</p>
+                            <p><strong>Fecha:</strong> ${formatDate(email.date)}</p>
+                        </div>
+                        
+                        <div class="email-body">
+                            ${email.body}
+                        </div>
+
+                        ${email.hasAttachments ? `
+                            <div class="attachment-list">
+                                <h4>Adjuntos:</h4>
+                                <ul>
+                                    ${email.attachments.map(att => `
+                                        <li>
+                                            ${att.filename} (${formatFileSize(att.size)})
+                                            <a href="/download/${email.id}/${att.attachmentId}/${att.filename}" 
+                                               class="btn btn-sm btn-primary ms-2">
+                                                Descargar
+                                            </a>
+                                        </li>
+                                    `).join('')}
+                                </ul>
+                                <button onclick="downloadAllAttachments('${email.id}')" 
+                                        class="btn btn-success">
+                                    Descargar Todos
+                                </button>
+                            </div>
+                        ` : ''}
+                    `;
+                    
+                    container.appendChild(emailCard);
+                });
+
+                updateLastUpdateTime();
+            } catch (error) {
+                console.error('Error cargando correos:', error);
+                alert('Error cargando correos');
+            } finally {
+                toggleRefreshIndicator(false);
+            }
+        }
+
+        // Función para descargar todos los adjuntos
+        async function downloadAllAttachments(messageId) {
+            try {
+                const response = await fetch(`/download-all/${messageId}`);
+                const result = await response.json();
+                alert('Adjuntos descargados exitosamente');
+            } catch (error) {
+                console.error('Error descargando adjuntos:', error);
+                alert('Error descargando adjuntos');
+            }
+        }
+
+        // Función para iniciar la actualización automática
+        function startAutoRefresh() {
+            // Cargar correos inmediatamente
+            loadEmails();
+            
+            // Configurar la actualización automática cada 5 minutos
+            autoRefreshInterval = setInterval(loadEmails, REFRESH_INTERVAL);
+        }
+
+        // Función para detener la actualización automática
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        }
+
+        // Iniciar la actualización automática cuando la página carga
+        startAutoRefresh();
+
+        // Detener la actualización automática cuando la página se cierra
+        window.addEventListener('beforeunload', stopAutoRefresh);
+    </script>
+</body>
+</html> 
