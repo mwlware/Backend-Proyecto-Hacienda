@@ -3,218 +3,232 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gmail Attachment Downloader</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Gmail Reader</title>
     <style>
-        .email-card {
-            margin-bottom: 20px;
-            border: 1px solid #ddd;
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .email-list {
+            background: white;
             border-radius: 8px;
-            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
         }
-        .email-header {
+        .email-item {
             border-bottom: 1px solid #eee;
-            padding-bottom: 10px;
-            margin-bottom: 10px;
+            padding: 15px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
-        .attachment-list {
-            margin-top: 10px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
+        .email-item:hover {
+            background-color: #f9f9f9;
         }
-        .email-body {
-            white-space: pre-wrap;
-            margin-top: 10px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
+        .email-subject {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #1a73e8;
         }
-        .last-update {
-            font-size: 0.8em;
+        .email-from {
             color: #666;
-            margin-bottom: 10px;
+            font-size: 0.9em;
         }
-        .refresh-indicator {
+        .email-date {
+            color: #999;
+            font-size: 0.8em;
+        }
+        .email-snippet {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .attachments {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .attachment-link {
+            color: #1a73e8;
+            text-decoration: none;
+            padding: 4px 8px;
+            background: #f0f7ff;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .attachment-link:hover {
+            background: #e3f2fd;
+        }
+        .email-details {
             display: none;
-            margin-left: 10px;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            max-width: 80%;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 1000;
         }
-        .refresh-indicator.active {
-            display: inline-block;
-            animation: spin 1s linear infinite;
+        .email-details.active {
+            display: block;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .email-details-header {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+        .email-details-body {
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+        .close-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #666;
+        }
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        .overlay.active {
+            display: block;
+        }
+        .refresh-button {
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .refresh-button:hover {
+            background: #1557b0;
         }
     </style>
 </head>
 <body>
-    <div class="container mt-4">
-        <h1 class="mb-4">Gmail Attachment Downloader</h1>
-        
-        <div class="mb-4">
-            <a href="/auth" class="btn btn-primary">Autenticar con Google</a>
-            <button onclick="loadEmails()" class="btn btn-secondary ms-2">
-                Actualizar Ahora
-                <span id="refresh-icon" class="refresh-indicator">⟳</span>
-            </button>
-            <span id="last-update" class="last-update"></span>
-        </div>
+    <div class="container">
+        <h1>Mis Correos</h1>
+        <button onclick="loadEmails()" class="refresh-button">Actualizar Correos</button>
+        <div id="emailList" class="email-list"></div>
+    </div>
 
-        <div id="emails-container"></div>
+    <div id="overlay" class="overlay"></div>
+    <div id="emailDetails" class="email-details">
+        <button class="close-button" onclick="closeEmailDetails()">&times;</button>
+        <div id="emailDetailsContent"></div>
     </div>
 
     <script>
-        let autoRefreshInterval;
-        const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutos en milisegundos
-
-        // Función para formatear la fecha
-        function formatDate(dateString) {
-            const date = new Date(dateString);
-            return date.toLocaleString();
-        }
-
-        // Función para formatear el tiempo transcurrido
-        function formatTimeAgo(date) {
-            const seconds = Math.floor((new Date() - date) / 1000);
-            
-            if (seconds < 60) return 'hace un momento';
-            
-            const minutes = Math.floor(seconds / 60);
-            if (minutes < 60) return `hace ${minutes} minuto${minutes !== 1 ? 's' : ''}`;
-            
-            const hours = Math.floor(minutes / 60);
-            if (hours < 24) return `hace ${hours} hora${hours !== 1 ? 's' : ''}`;
-            
-            const days = Math.floor(hours / 24);
-            return `hace ${days} día${days !== 1 ? 's' : ''}`;
-        }
-
-        // Función para formatear el tamaño del archivo
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
-
-        // Función para actualizar el indicador de última actualización
-        function updateLastUpdateTime() {
-            const now = new Date();
-            const lastUpdateElement = document.getElementById('last-update');
-            lastUpdateElement.textContent = `Última actualización: ${formatDate(now)}`;
-            
-            // Actualizar el tiempo transcurrido cada minuto
-            setInterval(() => {
-                lastUpdateElement.textContent = `Última actualización: ${formatTimeAgo(now)}`;
-            }, 60000);
-        }
-
-        // Función para mostrar/ocultar el indicador de actualización
-        function toggleRefreshIndicator(show) {
-            const refreshIcon = document.getElementById('refresh-icon');
-            if (show) {
-                refreshIcon.classList.add('active');
-            } else {
-                refreshIcon.classList.remove('active');
+        async function loadEmails() {
+            try {
+                const response = await fetch('/emails');
+                const emails = await response.json();
+                const emailList = document.getElementById('emailList');
+                
+                emailList.innerHTML = emails.map(email => `
+                    <div class="email-item" onclick="showEmailDetails('${email.id}')">
+                        <div class="email-subject">${email.subject}</div>
+                        <div class="email-from">De: ${email.from}</div>
+                        <div class="email-snippet">${email.snippet}</div>
+                        <div class="email-date">${new Date(email.date).toLocaleString()}</div>
+                        ${email.hasAttachments ? `
+                            <div class="attachments">
+                                ${email.attachments.map(att => `
+                                    <a href="/download/${email.id}/${att.attachmentId}/${att.filename}" 
+                                       class="attachment-link" 
+                                       onclick="event.stopPropagation()">
+                                        📎 ${att.filename}
+                                    </a>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error cargando correos:', error);
+                window.location.href = '/auth';
             }
         }
 
-        // Función para cargar los correos
-        async function loadEmails() {
-            try {
-                toggleRefreshIndicator(true);
-                const response = await fetch('/emails');
-                const emails = await response.json();
-                
-                const container = document.getElementById('emails-container');
-                container.innerHTML = '';
-
-                emails.forEach(email => {
-                    const emailCard = document.createElement('div');
-                    emailCard.className = 'email-card';
-                    
-                    emailCard.innerHTML = `
-                        <div class="email-header">
-                            <h3>${email.subject}</h3>
+        function showEmailDetails(emailId) {
+            const overlay = document.getElementById('overlay');
+            const emailDetails = document.getElementById('emailDetails');
+            
+            fetch(`/email/${emailId}`)
+                .then(response => response.json())
+                .then(email => {
+                    const content = document.getElementById('emailDetailsContent');
+                    content.innerHTML = `
+                        <div class="email-details-header">
+                            <h2>${email.subject}</h2>
                             <p><strong>De:</strong> ${email.from}</p>
                             <p><strong>Para:</strong> ${email.to}</p>
-                            <p><strong>Fecha:</strong> ${formatDate(email.date)}</p>
+                            <p><strong>Fecha:</strong> ${new Date(email.date).toLocaleString()}</p>
                         </div>
-                        
-                        <div class="email-body">
-                            ${email.body}
-                        </div>
-
+                        <div class="email-details-body">${email.body}</div>
                         ${email.hasAttachments ? `
-                            <div class="attachment-list">
-                                <h4>Adjuntos:</h4>
-                                <ul>
-                                    ${email.attachments.map(att => `
-                                        <li>
-                                            ${att.filename} (${formatFileSize(att.size)})
-                                            <a href="/download/${email.id}/${att.attachmentId}/${att.filename}" 
-                                               class="btn btn-sm btn-primary ms-2">
-                                                Descargar
-                                            </a>
-                                        </li>
-                                    `).join('')}
-                                </ul>
-                                <button onclick="downloadAllAttachments('${email.id}')" 
-                                        class="btn btn-success">
-                                    Descargar Todos
-                                </button>
+                            <div class="attachments">
+                                <h3>Adjuntos:</h3>
+                                ${email.attachments.map(att => `
+                                    <a href="/download/${email.id}/${att.attachmentId}/${att.filename}" 
+                                       class="attachment-link">
+                                        📎 ${att.filename}
+                                    </a>
+                                `).join('')}
                             </div>
                         ` : ''}
                     `;
                     
-                    container.appendChild(emailCard);
+                    overlay.classList.add('active');
+                    emailDetails.classList.add('active');
+                })
+                .catch(error => {
+                    console.error('Error cargando detalles del correo:', error);
                 });
-
-                updateLastUpdateTime();
-            } catch (error) {
-                console.error('Error cargando correos:', error);
-                alert('Error cargando correos');
-            } finally {
-                toggleRefreshIndicator(false);
-            }
         }
 
-        // Función para descargar todos los adjuntos
-        async function downloadAllAttachments(messageId) {
-            try {
-                const response = await fetch(`/download-all/${messageId}`);
-                const result = await response.json();
-                alert('Adjuntos descargados exitosamente');
-            } catch (error) {
-                console.error('Error descargando adjuntos:', error);
-                alert('Error descargando adjuntos');
-            }
-        }
-
-        // Función para iniciar la actualización automática
-        function startAutoRefresh() {
-            // Cargar correos inmediatamente
-            loadEmails();
+        function closeEmailDetails() {
+            const overlay = document.getElementById('overlay');
+            const emailDetails = document.getElementById('emailDetails');
             
-            // Configurar la actualización automática cada 5 minutos
-            autoRefreshInterval = setInterval(loadEmails, REFRESH_INTERVAL);
+            overlay.classList.remove('active');
+            emailDetails.classList.remove('active');
         }
 
-        // Función para detener la actualización automática
-        function stopAutoRefresh() {
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-            }
-        }
+        // Cerrar detalles al hacer clic en el overlay
+        document.getElementById('overlay').addEventListener('click', closeEmailDetails);
 
-        // Iniciar la actualización automática cuando la página carga
-        startAutoRefresh();
-
-        // Detener la actualización automática cuando la página se cierra
-        window.addEventListener('beforeunload', stopAutoRefresh);
+        // Cargar correos al iniciar
+        loadEmails();
     </script>
 </body>
 </html> 

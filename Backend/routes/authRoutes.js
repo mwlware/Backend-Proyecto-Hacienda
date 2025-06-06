@@ -2,21 +2,21 @@ const express = require('express');
 const router = express.Router();
 const { getAuthUrl, handleCallback } = require('../controllers/authController');
 
-// Ruta de autenticación
+// Ruta para iniciar el proceso de autenticación
 router.get('/auth', (req, res) => {
   const authUrl = getAuthUrl();
   res.redirect(authUrl);
 });
 
-// Callback de OAuth
-router.get('/oauth2callback', async (req, res) => {
+// Ruta de callback para OAuth
+router.get('/auth/callback', async (req, res) => {
   try {
-    const code = req.query.code;
+    const { code } = req.query;
     await handleCallback(code);
-    res.redirect('/emails');
+    res.redirect('http://localhost:5173/');
   } catch (error) {
-    console.error('Error en autenticación:', error);
-    res.status(500).send('Error de autenticación');
+    console.error('Error en callback:', error);
+    res.status(500).send('Error en autenticación');
   }
 });
 

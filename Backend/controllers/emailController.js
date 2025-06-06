@@ -39,8 +39,8 @@ const getEmails = async () => {
     
     const response = await gmail.users.messages.list({
       userId: 'me',
-      maxResults: 10,
-      q: 'has:attachment'
+      maxResults: 100,
+      q: 'in:inbox'
     });
 
     const messages = response.data.messages || [];
@@ -94,9 +94,13 @@ const getEmails = async () => {
         body,
         contentType,
         hasAttachments: attachments.length > 0,
-        attachments
+        attachments,
+        snippet: email.data.snippet || ''
       });
     }
+
+    // Ordenar correos por fecha, más recientes primero
+    emailDetails.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     return emailDetails;
   } catch (error) {
