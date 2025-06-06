@@ -1,10 +1,15 @@
 const express = require('express');
 require('dotenv').config();
+const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
+app.use(cors({
+  origin: 'http://localhost:5173', // URL de tu frontend
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -18,8 +23,8 @@ app.get('/', (req, res) => {
 });
 
 // Usar rutas
-app.use('/', authRoutes);
-app.use('/', emailRoutes);
+app.use('/api', authRoutes);
+app.use('/api', emailRoutes);
 
 // Error handler
 app.use((error, req, res, next) => {
