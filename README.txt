@@ -12,24 +12,33 @@ GUÍA RÁPIDA PARA SUBIR CAMBIOS A GITHUB
 
 ----------------------------------------
 
-2. COMANDOS PARA SUBIR CAMBIOS A LA RAMA `main`
+2. INICIAR LOS SERVIDORES LOCALMENTE
+
+Desde la carpeta correspondiente (frontend o backend), ejecutar:
+
+> npm run dev
+
+Este comando levanta el servidor local en modo desarrollo.
+
+----------------------------------------
+
+3. COMANDOS PARA SUBIR CAMBIOS A LA RAMA `main`
 
 Paso 1: Agrega los cambios
 > git add .
 
 Paso 2: Haz commit con un mensaje claro
-> git commit -m "descripcion del cambio"
+> git commit -m "descripción del cambio"
 
 Paso 3: Sube los cambios al repositorio
 > git push origin main
 
 ----------------------------------------
 
-3. NOTAS IMPORTANTES
+4. NOTAS IMPORTANTES
 
-❌ NO usar `git push -f` (forzar) a menos que lo indique el líder del equipo.
+- NO usar `git push -f` (forzar) a menos que lo indique el líder del equipo.
+- Usa mensajes de commit claros y específicos.
+- Si tienes dudas, consulta antes de subir.
 
-✅ Usa mensajes de commit claros y específicos.
-✅ Si tienes dudas, consulta antes de subir.
-
-¡Gracias por mantener el proyecto limpio y ordenado! 💪
+¡Gracias por mantener el proyecto limpio y ordenado!
