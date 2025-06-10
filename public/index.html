@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gmail Reader</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .email-list {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .email-item {
+            border-bottom: 1px solid #eee;
+            padding: 15px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .email-item:hover {
+            background-color: #f9f9f9;
+        }
+        .email-subject {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #1a73e8;
+        }
+        .email-from {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .email-date {
+            color: #999;
+            font-size: 0.8em;
+        }
+        .email-snippet {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .attachments {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .attachment-link {
+            color: #1a73e8;
+            text-decoration: none;
+            padding: 4px 8px;
+            background: #f0f7ff;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .attachment-link:hover {
+            background: #e3f2fd;
+        }
+        .email-details {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            max-width: 80%;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+        .email-details.active {
+            display: block;
+        }
+        .email-details-header {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+        .email-details-body {
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+        .close-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #666;
+        }
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        .overlay.active {
+            display: block;
+        }
+        .refresh-button {
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .refresh-button:hover {
+            background: #1557b0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mis Correos</h1>
+        <button onclick="loadEmails()" class="refresh-button">Actualizar Correos</button>
+        <div id="emailList" class="email-list"></div>
+    </div>
+
+    <div id="overlay" class="overlay"></div>
+    <div id="emailDetails" class="email-details">
+        <button class="close-button" onclick="closeEmailDetails()">&times;</button>
+        <div id="emailDetailsContent"></div>
+    </div>
+
+    <script>
+        async function loadEmails() {
+            try {
+                const response = await fetch('/emails');
+                const emails = await response.json();
+                const emailList = document.getElementById('emailList');
+                
+                emailList.innerHTML = emails.map(email => `
+                    <div class="email-item" onclick="showEmailDetails('${email.id}')">
+                        <div class="email-subject">${email.subject}</div>
+                        <div class="email-from">De: ${email.from}</div>
+                        <div class="email-snippet">${email.snippet}</div>
+                        <div class="email-date">${new Date(email.date).toLocaleString()}</div>
+                        ${email.hasAttachments ? `
+                            <div class="attachments">
+                                ${email.attachments.map(att => `
+                                    <a href="/download/${email.id}/${att.attachmentId}/${att.filename}" 
+                                       class="attachment-link" 
+                                       onclick="event.stopPropagation()">
+                                        📎 ${att.filename}
+                                    </a>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error cargando correos:', error);
+                window.location.href = '/auth';
+            }
+        }
+
+        function showEmailDetails(emailId) {
+            const overlay = document.getElementById('overlay');
+            const emailDetails = document.getElementById('emailDetails');
+            
+            fetch(`/email/${emailId}`)
+                .then(response => response.json())
+                .then(email => {
+                    const content = document.getElementById('emailDetailsContent');
+                    content.innerHTML = `
+                        <div class="email-details-header">
+                            <h2>${email.subject}</h2>
+                            <p><strong>De:</strong> ${email.from}</p>
+                            <p><strong>Para:</strong> ${email.to}</p>
+                            <p><strong>Fecha:</strong> ${new Date(email.date).toLocaleString()}</p>
+                        </div>
+                        <div class="email-details-body">${email.body}</div>
+                        ${email.hasAttachments ? `
+                            <div class="attachments">
+                                <h3>Adjuntos:</h3>
+                                ${email.attachments.map(att => `
+                                    <a href="/download/${email.id}/${att.attachmentId}/${att.filename}" 
+                                       class="attachment-link">
+                                        📎 ${att.filename}
+                                    </a>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    `;
+                    
+                    overlay.classList.add('active');
+                    emailDetails.classList.add('active');
+                })
+                .catch(error => {
+                    console.error('Error cargando detalles del correo:', error);
+                });
+        }
+
+        function closeEmailDetails() {
+            const overlay = document.getElementById('overlay');
+            const emailDetails = document.getElementById('emailDetails');
+            
+            overlay.classList.remove('active');
+            emailDetails.classList.remove('active');
+        }
+
+        // Cerrar detalles al hacer clic en el overlay
+        document.getElementById('overlay').addEventListener('click', closeEmailDetails);
+
+        // Cargar correos al iniciar
+        loadEmails();
+    </script>
+</body>
+</html> 
